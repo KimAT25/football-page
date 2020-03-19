@@ -1,5 +1,5 @@
-const useLocalStorage = false;
-const useMongoDB = false;
+let useLocalStorage = true;
+let useMongoDB = false;
 let addedFeadback = document.getElementById('feadback-admin');
 let storageFeadack = [];
 let db;
@@ -29,29 +29,24 @@ class SubmitUserForm {
   }
 }
 
-if (isOnline()) {
-  if (useLocalStorage) {
-    saved = JSON.parse(localStorage.getItem('feadback'));
-    if (saved) {
-      saved.map(el => {
-        let listFromLocalStorage = document.createElement('li');
-        listFromLocalStorage.innerHTML += `${el.firstName} 
-                                            ${el.lastName} 
-                                            ${el.email} 
-                                            ${el.feadback}`;
-        addedFeadback.appendChild(listFromLocalStorage);
-      });
-      localStorage.clear();
-    }
-  } else if (useMongoDB) {
-    getDataUser();
-  } else {
-    // getFromFeadbackDB();
-  }
-}
+const initIndexedDB = () => {
+  const openRequest = indexedDB.open('feadbackDB');
+  openRequest.onupgradeneeded = e => {
+    db = e.target.result;
+    db.createObjectStore('feadbackDB', {
+      keyPath: 'id'
+    });
+  };
+  openRequest.onsuccess = e => {
+    db = e.target.result;
+  };
+  openRequest.onerror = e => {
+    alert('Database error: ' + e.target.errorCode);
+  };
+};
 
-const feadbackSubmit = e => {
-  e.preventDefault();
+const feadbackSubmit = event => {
+  event.preventDefault();
 
   let id = Date.now();
   let firstName = document.getElementById('first-name').value;
@@ -94,7 +89,6 @@ const feadbackSubmit = e => {
       postToFeadbackDB(id, firstName, lastName, email, feadback);
     }
   }
-
   document.querySelector('form').reset();
 };
 document
@@ -138,19 +132,7 @@ document
   .querySelector('.form-group-admin-btn')
   .addEventListener('click', feadbackSubmit);
 
-let openRequest = window.indexedDB.open('feadbackDataBase');
-openRequest.onupgradeneeded = () => {
-  db = openRequest.result;
-  db.createObjectStore('feadbackDB', { keyPath: 'id' });
-};
-openRequest.onsuccess = () => {
-  db = openRequest.result;
-};
-openRequest.onerror = () => {
-  console.error('Error, fix the bugs!!');
-};
-
-function postToFeadbackDB(id, firstName, lastName, email, feadback) {
+const postToFeadbackDB = (id, firstName, lastName, email, feadback) => {
   let transaction = db.transaction('feadbackDB', 'readwrite');
   let feadbackDB = transaction.objectStore('feadbackDB');
 
@@ -161,16 +143,16 @@ function postToFeadbackDB(id, firstName, lastName, email, feadback) {
     email: `${email}`,
     feadback: `${feadback}`
   };
-  feadbackDB.put(objectDB);
-}
+  feadbackDB.add(objectDB);
+};
 
-function getFromFeadbackDB() {
+const getFromFeadbackDB = () => {
   let transaction = db.transaction('feadbackDB', 'readonly');
   let feadbackDB = transaction.objectStore('feadbackDB');
-  let request = feadbackDB.openCursor();
+  const request = feadbackDB.openCursor();
 
-  request.onsuccess = () => {
-    let cursor = request.result;
+  request.onsuccess = e => {
+    const cursor = e.target.result;
     if (cursor) {
       let listPostedDB = document.createElement('li');
       listPostedDB.innerHTML += `First Name:${cursor.value['first-name']};
@@ -181,4 +163,26 @@ function getFromFeadbackDB() {
       cursor.continue();
     }
   };
+};
+if (isOnline()) {
+  if (useLocalStorage) {
+    saved = JSON.parse(localStorage.getItem('feadback'));
+    if (saved) {
+      saved.map(el => {
+        let listFromLocalStorage = document.createElement('li');
+        listFromLocalStorage.innerHTML += `${el.firstName} 
+                                            ${el.lastName} 
+                                            ${el.email} 
+                                            ${el.feadback}`;
+        addedFeadback.appendChild(listFromLocalStorage);
+      });
+      localStorage.clear();
+    }
+  } else if (useMongoDB) {
+    getDataUser();
+  } else {
+    if (initIndexedDB()) {
+      getFromFeadbackDB();
+    }
+  }
 }
